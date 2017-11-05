@@ -1,22 +1,31 @@
+-- | A module for parsing newline-terminated CSV.
+
 module DupV.SimpleCSV where
 
 import Data.Functor
 import Text.ParserCombinators.ReadP
 
-loadSimpleCSV :: FilePath -> IO [[String]]
-loadSimpleCSV path = parse parseSimpleCSV <$> readFile path
+-- | We represent CSV as as wrapped version of [[String]].
 
-parseSimpleCSV :: ReadP [[String]]
-parseSimpleCSV = record `endBy` newline where
+newtype CSV = CSV { content :: [[String]] }
+
+-- | The Read instance just calls our parser.
+
+instance Read CSV where
+    readsPrec _ = readP_to_S parseSimpleCSV
+
+-- | Load a CSV file.
+
+loadSimpleCSV :: FilePath -> IO CSV
+loadSimpleCSV path = read <$> readFile path
+
+-- | Parse a CSV file.
+
+parseSimpleCSV :: ReadP CSV
+parseSimpleCSV = CSV <$> record `endBy` newline <* eof where
     newline = string "\n" <++ string "\r\n"
     record = field `sepBy` char ','
     field = quotedField <++ simpleField
     simpleField = munch (`notElem` ",\n\"")
     quotedField = char '"' *> many quoteChar <* char '"'
     quoteChar = satisfy (/= '"') <++ (string "\"\"" $> '"')
-    
-parse :: ReadP a -> String -> a
-parse parser s = case fst <$> readP_to_S (parser <* eof) s of
-    [a] -> a
-    []  -> error "no parse"
-    _   -> error "ambiguous parse"
